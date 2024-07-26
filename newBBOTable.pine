@@ -1,0 +1,128 @@
+//@version=5
+indicator("BBSR Extreme", overlay=true, shorttitle="BBSR Extreme")
+
+// General Inputs
+src = input(close, title="Source")
+offset = input.int(0, title="Offset", minval=-500, maxval=500)
+
+// Bollinger Inputs
+length = input.int(10, title="Bollinger Band Length", minval=1)
+mult = input.float(2.0, title="StdDev", minval=0.001, maxval=50)
+
+// Bollinger Code
+basis = ta.sma(src, length)
+dev = mult * ta.stdev(src, length)
+upper = basis + dev
+lower = basis - dev
+
+// Stoch Inputs
+smoothK = input.int(3, "K", minval=1)
+smoothD = input.int(3, "D", minval=1)
+lengthRSI = input.int(9, "RSI Length", minval=1)
+lengthStoch = input.int(9, "Stochastic Length", minval=1)
+
+upperlimit = input.float(92, "Upper Limit", minval=0.01)
+lowerlimit = input.float(8, "Lower Limit", minval=0.01)
+
+// Stochastic Code
+rsi1 = ta.rsi(src, lengthRSI)
+k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, lengthStoch), smoothK)
+d = ta.sma(k, smoothD)
+
+// Evaluation
+Bear = ta.crossover(close[1], upper[1]) and close < upper and k[1] > upperlimit and d[1] > upperlimit
+Bull = ta.crossunder(close[1], lower[1]) and close > lower and k[1] < lowerlimit and d[1] < lowerlimit
+
+// Plots
+plotshape(Bear, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(Bull, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+
+// Table Integration
+var tableColor = input.color(title="Table Color: ", defval=color.rgb(0, 175, 200, 20))
+var tableTextHeaderColor = input.color(title="Text Color: ", defval=color.rgb(255, 255, 0, 0))
+var tableBGColor = input.color(title="Background Color: ", defval=color.rgb(0, 255, 0, 90))
+
+var string[] signalArr = array.new_string(0)
+
+showFunc() =>
+    ((Bear or Bull) and (bar_index == bar_index[0]))
+
+// Son barı kontrol etme ve tabloya ekleme
+sb1 = request.security('CRYPTO:BLZUSD', timeframe.period, showFunc())
+sb2 = request.security('MEXC:AUCTIONUSDT', timeframe.period, showFunc())
+sb3 = request.security('CRYPTO:LSKUSD', timeframe.period, showFunc())
+sb4 = request.security('GATEIO:MBOXUSDT', timeframe.period, showFunc())
+sb5 = request.security('BINANCE:MAVUSDT', timeframe.period, showFunc())
+sb6 = request.security('CRYPTO:ZRXUSD', timeframe.period, showFunc())
+sb7 = request.security('BINANCE:HOOKUSDT', timeframe.period, showFunc())
+sb8 = request.security('BINANCE:DYDXUSDT', timeframe.period, showFunc())
+sb9 = request.security('BINANCE:NTRNUSDT', timeframe.period, showFunc())
+sb10 = request.security('MEXC:GTCUSDT', timeframe.period, showFunc())
+sb11 = request.security('MEXC:RDNTUSDT', timeframe.period, showFunc())
+sb12 = request.security('OKX:DGBUSDT', timeframe.period, showFunc())
+sb13 = request.security('CRYPTO:CELOUSD', timeframe.period, showFunc())
+sb14 = request.security('CRYPTO:PEPEUSD', timeframe.period, showFunc())
+sb15 = request.security('GATEIO:MDTUSDT', timeframe.period, showFunc())
+sb16 = request.security('MEXC:BLURUSDT', timeframe.period, showFunc())
+sb17 = request.security('GATEIO:FLOKIUSDT', timeframe.period, showFunc())
+sb18 = request.security('GATEIO:ENSUSDT', timeframe.period, showFunc())
+sb19 = request.security('CRYPTO:EGLDUSD', timeframe.period, showFunc())
+
+// Sadece son barı kontrol et ve tabloya ekle
+if barstate.islast
+    if sb1
+        array.push(signalArr, 'CRYPTO:BLZUSD')
+    if sb2
+        array.push(signalArr, 'MEXC:AUCTIONUSDT')
+    if sb3
+        array.push(signalArr, 'CRYPTO:LSKUSD')
+    if sb4
+        array.push(signalArr, 'GATEIO:MBOXUSDT')
+    if sb5
+        array.push(signalArr, 'BINANCE:MAVUSDT')
+    if sb6
+        array.push(signalArr, 'CRYPTO:ZRXUSD')
+    if sb7
+        array.push(signalArr, 'BINANCE:HOOKUSDT')
+    if sb8
+        array.push(signalArr, 'BINANCE:DYDXUSDT')
+    if sb9
+        array.push(signalArr, 'BINANCE:NTRNUSDT')
+    if sb10
+        array.push(signalArr, 'MEXC:GTCUSDT')
+    if sb11
+        array.push(signalArr, 'MEXC:RDNTUSDT')
+    if sb12
+        array.push(signalArr, 'OKX:DGBUSDT')
+    if sb13
+        array.push(signalArr, 'CRYPTO:CELOUSD')
+    if sb14
+        array.push(signalArr, 'CRYPTO:PEPEUSD')
+    if sb15
+        array.push(signalArr, 'GATEIO:MDTUSDT')
+    if sb16
+        array.push(signalArr, 'MEXC:BLURUSDT')
+    if sb17
+        array.push(signalArr, 'GATEIO:FLOKIUSDT')
+    if sb18
+        array.push(signalArr, 'GATEIO:ENSUSDT')
+    if sb19
+        array.push(signalArr, 'CRYPTO:EGLDUSD')
+
+    
+
+// Eğer çok fazla sinyal varsa, sadece bir kısmını ekle
+maxRows = 50
+rowCount = math.min(array.size(signalArr), maxRows)
+
+if rowCount > 0 and barstate.islast
+    var sigTable = table.new(position.top_right, columns=1, rows=rowCount)
+    table.set_border_width(sigTable, 1)
+    table.set_frame_width(sigTable, 1)
+    table.set_border_color(sigTable, tableColor)
+    table.set_frame_color(sigTable, tableColor)
+   
+    for i = 0 to rowCount - 1
+        table.cell(sigTable, 0, i, text=array.get(signalArr, i), text_color=tableTextHeaderColor, bgcolor=tableBGColor)
+        table.cell_set_height(sigTable, 0, i, 100 / rowCount)
+        table.cell_set_text_size(sigTable, 0, i, size.auto)

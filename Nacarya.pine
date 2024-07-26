@@ -1,0 +1,182 @@
+//@version=5
+indicator("Nadaraya-Watson Smoothers with Alerts", overlay=true)
+
+// Parametreler
+h = input.float(8., 'Bandwidth', minval = 0)
+src = input(close, 'Source')
+repaint = input(true, 'Repainting Smoothing', tooltip = 'Repainting is an effect where the indicators historical output is subject to change over time. Disabling repainting will cause the indicator to output the endpoint of the estimator')
+
+// Style
+upCss = input.color(color.teal, 'Colors', inline = 'inline1', group = 'Style')
+dnCss = input.color(color.red, '', inline = 'inline1', group = 'Style')
+
+// Gaussian window
+gauss(x, h) => math.exp(-(math.pow(x, 2)/(h * h * 2)))
+
+// End point method
+var coefs = array.new_float(0)
+var den = 0.
+
+if barstate.isfirst and not repaint
+    for i = 0 to 499
+        w = gauss(i, h)
+        array.push(coefs, w)
+
+    den := array.sum(coefs)
+
+out = 0.
+if not repaint
+    for i = 0 to 499
+        out += src[i] * array.get(coefs, i)
+out /= den
+
+// Compute and display NWE
+float y2 = na
+float y1 = na
+float y1_d = na
+
+if barstate.islast and repaint
+    // Compute and set NWE point 
+    for i = 0 to math.min(499, bar_index - 1)
+        sum = 0.
+        sumw = 0.
+        // Compute weighted mean 
+        for j = 0 to math.min(499, bar_index - 1)
+            w = gauss(i - j, h)
+            sum += src[j] * w
+            sumw += w
+
+        y2 := sum / sumw
+        d = y2 - y1
+
+        // Plot arrows
+        if d * y1_d < 0
+            label.new(bar_index-i+1, src[i], y1_d < 0 ? '▲' : '▼'
+              , color = color(na)
+              , style = y1_d < 0 ? label.style_label_up : label.style_label_down
+              , textcolor = y1_d < 0 ? upCss : dnCss
+              , textalign = text.align_center)
+
+        y1 := y2
+        y1_d := d
+
+plot(repaint ? na : out, 'NWE Endpoint Estimator', out > out[1] ? upCss : dnCss)
+
+// Tablo İşlemleri
+var tableColor = input.color(title="Tablo Rengi: ", defval=color.rgb(0, 175, 200, 20), group="Tablo Ayarları")  
+var tableTextHeaderColor = input.color(title="Yazı Rengi: ", defval=color.rgb(255, 255, 0, 0), group="Tablo Ayarları")
+var tableBGColor = input.color(title="Arkaplan Rengi: ", defval=color.rgb(0, 255, 0, 90), group="Tablo Ayarları")
+
+calculate() =>
+    value = false
+    if (y2 - y1) * y1_d < 0
+        value := true
+    value
+
+showFunc() =>
+    calculate()
+
+buyArr = array.new_string(0)
+
+sb1 = request.security('CRYPTO:BLZUSD', timeframe.period, showFunc())
+sb2 = request.security('MEXC:AUCTIONUSDT', timeframe.period, showFunc())
+sb3 = request.security('CRYPTO:LSKUSD', timeframe.period, showFunc())
+sb4 = request.security('GATEIO:MBOXUSDT', timeframe.period, showFunc())
+sb5 = request.security('BINANCE:MAVUSDT', timeframe.period, showFunc())
+sb6 = request.security('CRYPTO:ZRXUSD', timeframe.period, showFunc())
+sb7 = request.security('BINANCE:HOOKUSDT', timeframe.period, showFunc())
+sb8 = request.security('BINANCE:DYDXUSDT', timeframe.period, showFunc())
+sb9 = request.security('BINANCE:NTRNUSDT', timeframe.period, showFunc())
+sb10 = request.security('MEXC:GTCUSDT', timeframe.period, showFunc())
+sb11 = request.security('MEXC:RDNTUSDT', timeframe.period, showFunc())
+sb12 = request.security('OKX:DGBUSDT', timeframe.period, showFunc())
+sb13 = request.security('CRYPTO:CELOUSD', timeframe.period, showFunc())
+sb14 = request.security('CRYPTO:PEPEUSD', timeframe.period, showFunc())
+sb15 = request.security('GATEIO:MDTUSDT', timeframe.period, showFunc())
+sb16 = request.security('MEXC:BLURUSDT', timeframe.period, showFunc())
+sb17 = request.security('GATEIO:FLOKIUSDT', timeframe.period, showFunc())
+sb18 = request.security('GATEIO:ENSUSDT', timeframe.period, showFunc())
+sb19 = request.security('CRYPTO:EGLDUSD', timeframe.period, showFunc())
+sb20 = request.security('MEXC:PENDLEUSDT', timeframe.period, showFunc())
+sb21 = request.security('GATEIO:YGGUSDT', timeframe.period, showFunc())
+sb22 = request.security('BINANCE:APEUSDT', timeframe.period, showFunc())
+sb23 = request.security('BINANCE:CYBERUSDT', timeframe.period, showFunc())
+sb24 = request.security('BINANCE:REEFUSDT', timeframe.period, showFunc())
+sb25 = request.security('MEXC:HFTUSDT', timeframe.period, showFunc())
+sb26 = request.security('MEXC:BAKEUSDT', timeframe.period, showFunc())
+sb27 = request.security('CRYPTO:LOOMUSD', timeframe.period, showFunc())
+sb28 = request.security('GATEIO:MOVRUSDT', timeframe.period, showFunc())
+sb29 = request.security('CRYPTO:STORJUSD', timeframe.period, showFunc())
+
+
+if sb1
+    array.push(buyArr, 'CRYPTO:BLZUSD')
+if sb2
+    array.push(buyArr, 'MEXC:AUCTIONUSDT')
+if sb3
+    array.push(buyArr, 'CRYPTO:LSKUSD')
+if sb4
+    array.push(buyArr, 'GATEIO:MBOXUSDT')
+if sb5
+    array.push(buyArr, 'BINANCE:MAVUSDT')
+if sb6
+    array.push(buyArr, 'CRYPTO:ZRXUSD')
+if sb7
+    array.push(buyArr, 'BINANCE:HOOKUSDT')
+if sb8
+    array.push(buyArr, 'BINANCE:DYDXUSDT')
+if sb9
+    array.push(buyArr, 'BINANCE:NTRNUSDT')
+if sb10
+    array.push(buyArr, 'MEXC:GTCUSDT')
+if sb11
+    array.push(buyArr, 'MEXC:RDNTUSDT')
+if sb12
+    array.push(buyArr, 'OKX:DGBUSDT')
+if sb13
+    array.push(buyArr, 'CRYPTO:CELOUSD')
+if sb14
+    array.push(buyArr, 'CRYPTO:PEPEUSD')
+if sb15
+    array.push(buyArr, 'GATEIO:MDTUSDT')
+if sb16
+    array.push(buyArr, 'MEXC:BLURUSDT')
+if sb17
+    array.push(buyArr, 'GATEIO:FLOKIUSDT')
+if sb18
+    array.push(buyArr, 'GATEIO:ENSUSDT')
+if sb19
+    array.push(buyArr, 'CRYPTO:EGLDUSD')
+if sb20
+    array.push(buyArr, 'MEXC:PENDLEUSDT')
+if sb21
+    array.push(buyArr, 'GATEIO:YGGUSDT')
+if sb22
+    array.push(buyArr, 'BINANCE:APEUSDT')
+if sb23
+    array.push(buyArr, 'BINANCE:CYBERUSDT')
+if sb24
+    array.push(buyArr, 'BINANCE:REEFUSDT')
+if sb25
+    array.push(buyArr, 'MEXC:HFTUSDT')
+if sb26
+    array.push(buyArr, 'MEXC:BAKEUSDT')
+if sb27
+    array.push(buyArr, 'CRYPTO:LOOMUSD')
+if sb28
+    array.push(buyArr, 'GATEIO:MOVRUSDT')
+if sb29
+    array.push(buyArr, 'CRYPTO:STORJUSD')
+
+
+if array.size(buyArr) > 0 and barstate.islast
+    var atrTable = table.new(position=position.top_right, columns=1, rows=(array.size(buyArr)+1))
+    table.set_border_width(atrTable, 1)
+    table.set_frame_width(atrTable, 1)
+    table.set_border_color(atrTable, tableColor)
+    table.set_frame_color(atrTable, tableColor)
+   
+    for j = 0 to (array.size(buyArr) - 1)
+        table.cell(atrTable, 0, j, text=str.tostring(array.get(buyArr, j)), text_color=tableTextHeaderColor, bgcolor=tableBGColor, tooltip="Test")
+        table.cell_set_height(atrTable, 0, j, 100 / array.size(buyArr))
+        table.cell_set_text_size(atrTable, 0, j, size.auto)

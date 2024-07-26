@@ -1,0 +1,306 @@
+//@version=5
+indicator("Supply and Demand With Table", overlay = true, max_boxes_count = 500, max_bars_back = 300)
+
+//------------------------------------------------------------------------------
+//Settings
+//-----------------------------------------------------------------------------{
+per = input.float(10., 'Threshold %', minval = 0, maxval = 100)
+div = input.int(50, 'Resolution', minval = 2, maxval = 500)
+tf  = input.timeframe('15', 'Intrabar TF')
+
+//Colors
+showSupply = input(true ,'Supply', inline = 'supply', group = 'Style')
+supplyCss  = input(#2157f3, '', inline = 'supply', group = 'Style')
+supplyArea = input(true ,'Area', inline = 'supply', group = 'Style')
+supplyAvg  = input(true ,'Average', inline = 'supply', group = 'Style')
+
+
+showDemand = input(true ,'Demand', inline = 'demand', group = 'Style')
+demandCss  = input(#ff5d00, '', inline = 'demand', group = 'Style')
+demandArea = input(true ,'Area', inline = 'demand', group = 'Style')
+demandAvg  = input(true ,'Average', inline = 'demand', group = 'Style')
+
+//-----------------------------------------------------------------------------}
+//UDT's
+//-----------------------------------------------------------------------------{
+type bin
+    float lvl
+    float prev
+    float sum
+    float prev_sum
+    float csum
+    float avg
+    bool isreached
+
+type area
+    box  bx
+    line avg 
+
+//-----------------------------------------------------------------------------}
+//Functions
+//-----------------------------------------------------------------------------{
+n = bar_index
+
+get_hlv()=> [high, low, volume]
+
+method set_area(area id, x1, top, btm, avg, showArea, showAvg)=>
+    if showArea
+        id.bx.set_lefttop(x1, top)
+        id.bx.set_rightbottom(n, btm)    
+    
+    if showAvg
+        id.avg.set_xy1(x1, avg)
+        id.avg.set_xy2(n, avg)
+
+//-----------------------------------------------------------------------------}
+//Main variables
+//-----------------------------------------------------------------------------{
+var max  = 0. 
+var min  = 0.
+var x1   = 0
+var csum = 0.
+
+//Intrabar data
+[h, l, v] = request.security_lower_tf(syminfo.tickerid, tf, get_hlv())
+
+//Init on left bar
+if time == chart.left_visible_bar_time
+    max := high
+    min := low
+    csum := volume
+    x1 := n
+else //Accumulate
+    max := math.max(high, max)
+    min := math.min(low, min)
+    csum += volume
+
+//-----------------------------------------------------------------------------}
+//Set zones
+//-----------------------------------------------------------------------------{
+var supply_area = area.new(
+  box.new(na, na, na, na, na, bgcolor = color.new(supplyCss, 80))
+  , line.new(na, na, na, na, color = supplyCss))
+
+var demand_area = area.new(
+  box.new(na, na, na, na, na, bgcolor = color.new(demandCss, 80))
+  , line.new(na, na, na, na, color = demandCss))
+
+
+var float supply_avg = na
+var float demand_avg = na
+
+if time == chart.right_visible_bar_time
+    r = (max - min) / div
+    supply = bin.new(max, max, 0, 0, 0, 0, false)
+    demand = bin.new(min, min, 0, 0, 0, 0, false)
+
+    //Loop trough intervals
+    for i = 0 to div-1
+        supply.lvl -= r
+        demand.lvl += r
+
+        //Accumulated volume column
+        if not supply.isreached and showSupply and supplyArea
+            box.new(x1, supply.prev, x1 + int(supply.sum / csum * (n - x1)), supply.lvl, na
+              , bgcolor = color.new(supplyCss, 50))
+        
+        if not demand.isreached and showDemand and demandArea
+            box.new(x1, demand.lvl, x1 + int(demand.sum / csum * (n - x1)), demand.prev, na
+              , bgcolor = color.new(demandCss, 50))
+        
+        //Loop trough bars
+        for j = 0 to (n - x1)-1
+            //Loop trough intrabars
+            for k = 0 to (v[j]).size()-1
+                //Accumulate if within upper interval
+                supply.sum      += (h[j]).get(k) > supply.lvl and (h[j]).get(k) < supply.prev ? (v[j]).get(k) : 0
+                supply.avg      += supply.lvl * (supply.sum - supply.prev_sum)
+                supply.csum     += supply.sum - supply.prev_sum
+                supply.prev_sum := supply.sum
+
+                //Accumulate if within lower interval
+                demand.sum      += (l[j]).get(k) < demand.lvl and (l[j]).get(k) > demand.prev ? (v[j]).get(k) : 0
+                demand.avg      += demand.lvl * (demand.sum - demand.prev_sum)
+                demand.csum     += demand.sum - demand.prev_sum
+                demand.prev_sum := demand.sum
+                
+            //Test if supply accumulated volume exceed threshold and set box
+            if supply.sum / csum * 100 > per and not supply.isreached
+                avg = math.avg(max, supply.lvl)
+                supply_avg := supply.avg / supply.csum
+
+                //Set Box/Level coordinates
+                if showSupply
+                    supply_area.set_area(x1, max, supply.lvl, avg, supplyArea, supplyAvg)
+
+                supply.isreached := true
+            
+            //Test if demand accumulated volume exceed threshold and set box
+            if demand.sum / csum * 100 > per and not demand.isreached and showDemand
+                avg = math.avg(min, demand.lvl)
+                demand_avg := demand.avg / demand.csum
+                
+                //Set Box/Level coordinates
+                if showDemand
+                    demand_area.set_area(x1, demand.lvl, min, avg, demandArea, demandAvg)
+
+                demand.isreached := true
+            
+            if supply.isreached and demand.isreached
+                break
+        
+        if supply.isreached and demand.isreached 
+            supply.prev := supply.lvl
+            demand.prev := demand.lvl
+
+//-----------------------------------------------------------------------------}
+
+// Tablo İşlemleri
+var tableColor = input.color(title="Tablo Rengi: ", defval=color.rgb(0, 175, 200, 20), group="Tablo Ayarları")  
+var tableTextHeaderColor = input.color(title="Yazı Rengi: ", defval=color.rgb(255, 255, 0, 0), group="Tablo Ayarları")
+var tableBGColor = input.color(title="Arkaplan Rengi: ", defval=color.rgb(0, 255, 0, 90), group="Tablo Ayarları")
+
+// Function to check conditions and add to table
+check_conditions() =>
+    value = false
+    if (close > supply_avg or close < demand_avg)
+        value := true
+    value
+
+buyArr = array.new_string(0)
+
+
+sb1 =   request.security('CRYPTO:BLZUSD',   timeframe.period, check_conditions())
+sb2 =   request.security('MEXC:AUCTIONUSDT',   timeframe.period, check_conditions())
+sb3 =   request.security('CRYPTO:LSKUSD',   timeframe.period, check_conditions())
+sb4 =   request.security('GATEIO:MBOXUSDT',   timeframe.period, check_conditions())
+sb5 =   request.security('BINANCE:MAVUSDT',   timeframe.period, check_conditions())
+sb6 =   request.security('CRYPTO:ZRXUSD',   timeframe.period, check_conditions())
+sb7 =   request.security('BINANCE:HOOKUSDT',   timeframe.period, check_conditions())
+sb8 =   request.security('BINANCE:DYDXUSDT',   timeframe.period, check_conditions())
+sb9 =   request.security('BINANCE:NTRNUSDT',   timeframe.period, check_conditions())
+sb10 =  request.security('MEXC:GTCUSDT',   timeframe.period, check_conditions())
+sb11 =  request.security('MEXC:RDNTUSDT',   timeframe.period, check_conditions())
+sb12 =  request.security('OKX:DGBUSDT',   timeframe.period, check_conditions())
+sb13 =  request.security('CRYPTO:CELOUSD',   timeframe.period, check_conditions())
+sb14 =  request.security('CRYPTO:PEPEUSD',   timeframe.period, check_conditions())
+sb15 =  request.security('GATEIO:MDTUSDT',   timeframe.period, check_conditions())
+sb16 =  request.security('MEXC:BLURUSDT',   timeframe.period, check_conditions())
+sb17 =  request.security('GATEIO:FLOKIUSDT',   timeframe.period, check_conditions())
+sb18 =  request.security('GATEIO:ENSUSDT',   timeframe.period, check_conditions())
+sb19 =  request.security('CRYPTO:EGLDUSD',   timeframe.period, check_conditions())
+sb20 =  request.security('MEXC:PENDLEUSDT',   timeframe.period, check_conditions())
+sb21 =  request.security('GATEIO:YGGUSDT',   timeframe.period, check_conditions())
+sb22 =  request.security('BINANCE:APEUSDT',   timeframe.period, check_conditions())
+sb23 =  request.security('BINANCE:CYBERUSDT',   timeframe.period, check_conditions())
+sb24 =  request.security('BINANCE:REEFUSDT',   timeframe.period, check_conditions())
+sb25 =  request.security('MEXC:HFTUSDT',   timeframe.period, check_conditions())
+sb26 =  request.security('MEXC:BAKEUSDT',   timeframe.period, check_conditions())
+sb27 =  request.security('CRYPTO:LOOMUSD',   timeframe.period, check_conditions())
+sb28 =  request.security('GATEIO:MOVRUSDT',   timeframe.period, check_conditions())
+sb29 =  request.security('CRYPTO:STORJUSD',   timeframe.period, check_conditions())
+sb30 =  request.security('MEXC:HIFIUSDT',   timeframe.period, check_conditions())
+sb31 =  request.security('GATEIO:IOTXUSDT',   timeframe.period, check_conditions())
+sb32 =  request.security('MEXC:KSMUSDT',   timeframe.period, check_conditions())
+sb34 =  request.security('BINANCE:WLDUSDT',   timeframe.period, check_conditions())
+sb35 =  request.security('CRYPTO:GMTUSD',   timeframe.period, check_conditions())
+sb36 =  request.security('MEXC:IMXUSDT',   timeframe.period, check_conditions())
+sb37 =  request.security('BINANCE:STXUSDT',   timeframe.period, check_conditions())
+sb38 =  request.security('BINANCE:FLMUSDT',   timeframe.period, check_conditions())
+
+
+if sb1
+    array.push(buyArr,'CRYPTO:BLZUSD')
+if sb2
+    array.push(buyArr,'MEXC:AUCTIONUSDT')
+if sb3
+    array.push(buyArr,'CRYPTO:LSKUSD')
+if sb4
+    array.push(buyArr,'GATEIO:MBOXUSDT')
+if sb5
+    array.push(buyArr,'BINANCE:MAVUSDT')
+if sb6
+    array.push(buyArr,'CRYPTO:ZRXUSD')
+if sb7
+    array.push(buyArr,'BINANCE:HOOKUSDT')
+if sb8
+    array.push(buyArr,'BINANCE:DYDXUSDT')
+if sb9
+    array.push(buyArr,'BINANCE:NTRNUSDT')
+if sb10
+    array.push(buyArr,'MEXC:GTCUSDT')
+if sb11
+    array.push(buyArr,'MEXC:RDNTUSDT')
+if sb12
+    array.push(buyArr,'OKX:DGBUSDT')
+if sb13
+    array.push(buyArr,'CRYPTO:CELOUSD')
+if sb14
+    array.push(buyArr,'CRYPTO:PEPEUSD')
+if sb15
+    array.push(buyArr,'GATEIO:MDTUSDT')
+if sb16
+    array.push(buyArr,'MEXC:BLURUSDT')
+if sb17
+    array.push(buyArr,'GATEIO:FLOKIUSDT')
+if sb18
+    array.push(buyArr,'GATEIO:ENSUSDT')
+if sb19
+    array.push(buyArr,'CRYPTO:EGLDUSD')
+if sb20
+    array.push(buyArr,'MEXC:PENDLEUSDT')
+if sb21
+    array.push(buyArr,'GATEIO:YGGUSDT')
+if sb22
+    array.push(buyArr,'BINANCE:APEUSDT')
+if sb23
+    array.push(buyArr,'BINANCE:CYBERUSDT')
+if sb24
+    array.push(buyArr,'BINANCE:REEFUSDT')
+if sb25
+    array.push(buyArr,'MEXC:HFTUSDT')
+if sb26
+    array.push(buyArr,'MEXC:BAKEUSDT')
+if sb27
+    array.push(buyArr,'CRYPTO:LOOMUSD')
+if sb28
+    array.push(buyArr,'GATEIO:MOVRUSDT')
+if sb29
+    array.push(buyArr,'CRYPTO:STORJUSD')
+if sb30
+    array.push(buyArr,'MEXC:HIFIUSDT')
+if sb31
+    array.push(buyArr,'GATEIO:IOTXUSDT')
+if sb32
+    array.push(buyArr,'MEXC:KSMUSDT')
+
+if sb34
+    array.push(buyArr,'BINANCE:WLDUSDT')
+if sb35
+    array.push(buyArr,'CRYPTO:GMTUSD')
+if sb36
+    array.push(buyArr,'MEXC:IMXUSDT')
+if sb37
+    array.push(buyArr,'BINANCE:STXUSDT')
+if sb38
+    array.push(buyArr,'BINANCE:FLMUSDT')
+
+   
+
+if array.size(buyArr) > 0 and barstate.islast
+    tableColor = input.color(title="Tablo Rengi: ", defval=color.rgb(0, 175, 200, 20), group="Tablo Ayarları")  
+    tableTextHeaderColor = input.color(title="Yazı Rengi: ", defval=color.rgb(255, 255, 0, 0), group="Tablo Ayarları")
+    tableBGColor = input.color(title="Arkaplan Rengi: ", defval=color.rgb(0, 255, 0, 90), group="Tablo Ayarları")
+    tableHeight = 100/array.size(buyArr)
+   
+    var atrTable = table.new(position=position.top_right, columns=1, rows=(array.size(buyArr)+1))
+    // var atrTable = table.new(position=position.top_right, columns=1, rows=20)
+    table.set_border_width(atrTable, 1)
+    table.set_frame_width(atrTable, 1)
+    table.set_border_color(atrTable, tableColor)
+    table.set_frame_color(atrTable, tableColor)
+   
+    for i = 0 to (array.size(buyArr)-1)
+        table.cell(atrTable, 0, i, text=str.tostring(array.get(buyArr,i)), text_color=tableTextHeaderColor, bgcolor=tableBGColor, tooltip="Test")
+        table.cell_set_height(atrTable,0,i,tableHeight)
+        table.cell_set_text_size(atrTable,0,i,size.auto)
